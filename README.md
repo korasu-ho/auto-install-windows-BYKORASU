@@ -53,6 +53,10 @@ Pilihan `WIN_VERSION_CHOICE`:
 - `3` = Windows Server 2022
 - `4` = custom URL (wajib isi `ISO_URL`)
 
+Catatan pilihan `1-3`:
+- Source ISO adalah Microsoft Evaluation media.
+- Script unattended sudah diset untuk suppress tampilan input product key saat setup.
+
 Contoh custom URL ISO:
 
 ```bash
@@ -62,11 +66,18 @@ sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https:
 Catatan:
 - `ISO_URL` harus direct link file `.iso` (bisa di-download langsung oleh `wget/curl`).
 - Link share `mega.nz/file/...` sekarang didukung otomatis oleh script (akan pakai `megatools`).
+- Link Google Drive (`drive.google.com/...`) sekarang didukung otomatis oleh script (akan pakai `gdown`).
 
 Contoh custom URL Mega (langsung):
 
 ```bash
 sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://mega.nz/file/ELBxwISD#ZhALWVoo4sLdUwcfLSZbSka3HoRYE2m5it7WAWCJREE' ./install_windows_auto.sh
+```
+
+Contoh custom URL Google Drive:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://drive.google.com/file/d/FILE_ID/view?usp=sharing' ./install_windows_auto.sh
 ```
 
 ### 2) Pantau proses install
@@ -100,6 +111,12 @@ Contoh one-shot dengan link Mega:
 
 ```bash
 sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://mega.nz/file/ELBxwISD#ZhALWVoo4sLdUwcfLSZbSka3HoRYE2m5it7WAWCJREE' bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
+```
+
+Contoh one-shot dengan Google Drive:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://drive.google.com/file/d/FILE_ID/view?usp=sharing' bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
 ```
 
 Verifikasi ISO yang dipakai saat custom URL:

@@ -101,6 +101,8 @@ apt_install() {
     qemu-system-x86 \
     qemu-utils \
     genisoimage \
+    python3 \
+    python3-venv \
     curl \
     wget
 }
@@ -138,6 +140,39 @@ download_from_mega() {
   echo "Mega ISO saved to ${ISO_PATH}"
 }
 
+is_google_drive_url() {
+  local url="$1"
+  [[ "$url" == *"drive.google.com"* || "$url" == *"docs.google.com"* ]]
+}
+
+ensure_gdown() {
+  local venv_path="${BASE_DIR}/.gdown-venv"
+  if [[ ! -x "${venv_path}/bin/gdown" ]]; then
+    echo "Installing gdown (Google Drive downloader)..."
+    python3 -m venv "${venv_path}"
+    "${venv_path}/bin/pip" install --upgrade pip >/dev/null
+    "${venv_path}/bin/pip" install gdown >/dev/null
+  fi
+
+  echo "${venv_path}/bin/gdown"
+}
+
+download_from_gdrive() {
+  local gdrive_url="$1"
+  local gdown_bin
+  gdown_bin="$(ensure_gdown)"
+
+  echo "Downloading ISO from Google Drive via gdown..."
+  "${gdown_bin}" --fuzzy "$gdrive_url" -O "${ISO_PATH}"
+
+  if [[ ! -s "${ISO_PATH}" ]]; then
+    echo "Error: gdown finished but ISO file is empty or missing: ${ISO_PATH}"
+    exit 1
+  fi
+
+  echo "Google Drive ISO saved to ${ISO_PATH}"
+}
+
 prepare_iso() {
   if [[ -f "${ISO_PATH}" ]]; then
     if [[ -n "${ISO_URL}" && -f "${ISO_SOURCE_MARKER}" ]]; then
@@ -165,6 +200,8 @@ prepare_iso() {
 
   if is_mega_url "${ISO_URL}"; then
     download_from_mega "${ISO_URL}"
+  elif is_google_drive_url "${ISO_URL}"; then
+    download_from_gdrive "${ISO_URL}"
   else
     echo "Downloading Windows ISO..."
     wget -O "${ISO_PATH}" "${ISO_URL}"
@@ -207,6 +244,9 @@ write_unattend() {
       </ImageInstall>
       <UserData>
         <AcceptEula>true</AcceptEula>
+        <ProductKey>
+          <WillShowUI>Never</WillShowUI>
+        </ProductKey>
         <FullName>${WIN_USER}</FullName>
         <Organization>AutoInstall</Organization>
       </UserData>
