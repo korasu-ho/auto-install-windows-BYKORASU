@@ -180,5 +180,15 @@ chmod +x diagnose_rdp.sh
 sudo ./diagnose_rdp.sh
 ```
 
+- Jika muncul error `Windows cannot locate the disk and partition specified`:
+
+```bash
+sudo ./stop_windows_vm.sh
+sudo rm -f /opt/winvm/winvm.qcow2 /opt/winvm/Autounattend.xml /opt/winvm/autounattend.iso
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 ./install_windows_auto.sh
+```
+
+Script sudah diperbarui agar partisi dibuat otomatis (wipe + create + format) dan target instalasi diarahkan ke Disk 0 Partition 2.
+
 - Jika VM berat/lambat, turunkan VM_CPUS dan/atau VM_RAM_MB.
 - Jika install gagal, cek ISO Anda (wajib ISO bootable x64).
