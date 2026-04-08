@@ -20,6 +20,8 @@ Anda bisa override dengan environment variable.
 - install_windows_auto.sh: siapkan dependency + unattended install
 - start_windows_vm.sh: boot normal setelah install selesai
 - stop_windows_vm.sh: hentikan VM
+- diagnose_rdp.sh: diagnosa cepat masalah koneksi RDP
+- droplet_one_shot_setup.sh: one-shot setup dari droplet baru
 
 ## Cara pakai
 ### Opsi paling mudah (Windows one-click push ke GitHub)
@@ -48,11 +50,36 @@ chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh
 chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh
 ```
 
+### Opsi droplet one-shot (paling cepat dari server baru)
+Jalankan langsung di droplet:
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
+```
+
+Contoh dengan password dan pilihan Windows Server 2022:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
+```
+
 2. Jalankan installer unattended:
 
 ```bash
 sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' ISO_URL='https://url-iso-windows-anda.iso' ./install_windows_auto.sh
 ```
+
+Atau pakai pilihan cepat ISO official Microsoft:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 ./install_windows_auto.sh
+```
+
+Pilihan `WIN_VERSION_CHOICE`:
+- `1` = Windows Server 2016
+- `2` = Windows Server 2019
+- `3` = Windows Server 2022
+- `4` = custom URL (wajib isi `ISO_URL`)
 
 Jika ISO sudah Anda copy manual ke `/opt/winvm/windows.iso`, cukup:
 
@@ -63,6 +90,13 @@ sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' ./install_windows_auto.sh
 3. Akses proses install:
 - VNC: `IP_DROPLET:5901`
 - Setelah selesai install: RDP `IP_DROPLET:3389`
+
+RDP sekarang dipaksa aktif otomatis saat first logon, termasuk:
+- enable RDP,
+- buka firewall remote desktop,
+- allow TCP 3389 secara eksplisit,
+- paksa service `TermService` auto-start,
+- disable NLA untuk kompatibilitas client RDP.
 
 4. Setelah install selesai, hentikan mode installer dan jalankan mode normal:
 
@@ -76,6 +110,7 @@ sudo ./start_windows_vm.sh
 - VM_RAM_MB (default: 6144)
 - DISK_GB (default: 64)
 - ISO_URL (opsional jika ISO belum ada)
+- WIN_VERSION_CHOICE (opsional: 1/2/3/4)
 - ISO_PATH (default: /opt/winvm/windows.iso)
 - RDP_HOST_PORT (default: 3389)
 - VNC_DISPLAY (default: 1 -> port 5901)
@@ -96,6 +131,13 @@ Buka port berikut di firewall droplet/security group:
 
 ```bash
 ps aux | grep qemu-system-x86_64
+```
+
+- Jalankan diagnosa RDP end-to-end dari host droplet:
+
+```bash
+chmod +x diagnose_rdp.sh
+sudo ./diagnose_rdp.sh
 ```
 
 - Jika VM berat/lambat, turunkan VM_CPUS dan/atau VM_RAM_MB.

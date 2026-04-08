@@ -15,6 +15,7 @@ VM_NAME="${VM_NAME:-winvm}"
 BASE_DIR="${BASE_DIR:-/opt/${VM_NAME}}"
 ISO_PATH="${ISO_PATH:-${BASE_DIR}/windows.iso}"
 ISO_URL="${ISO_URL:-}"
+WIN_VERSION_CHOICE="${WIN_VERSION_CHOICE:-}"
 DISK_PATH="${DISK_PATH:-${BASE_DIR}/${VM_NAME}.qcow2}"
 DISK_GB="${DISK_GB:-64}"
 VM_CPUS="${VM_CPUS:-4}"
@@ -31,6 +32,62 @@ AUTOUNATTEND_ISO="${BASE_DIR}/autounattend.iso"
 QEMU_PIDFILE="${BASE_DIR}/qemu-install.pid"
 
 mkdir -p "${BASE_DIR}"
+
+show_windows_menu() {
+  cat <<'MENU'
+Pilih versi Windows (official Microsoft Evaluation ISO):
+1) Windows Server 2016
+2) Windows Server 2019
+3) Windows Server 2022
+4) Custom URL (isi ISO_URL manual)
+MENU
+}
+
+set_iso_from_choice() {
+  local choice="$1"
+  case "$choice" in
+    1)
+      ISO_URL="https://go.microsoft.com/fwlink/p/?LinkID=2195174&clcid=0x409&culture=en-us&country=US"
+      ISO_PATH="${BASE_DIR}/windows2016.iso"
+      ;;
+    2)
+      ISO_URL="https://go.microsoft.com/fwlink/p/?LinkID=2195167&clcid=0x409&culture=en-us&country=US"
+      ISO_PATH="${BASE_DIR}/windows2019.iso"
+      ;;
+    3)
+      ISO_URL="https://go.microsoft.com/fwlink/p/?LinkID=2195280&clcid=0x409&culture=en-us&country=US"
+      ISO_PATH="${BASE_DIR}/windows2022.iso"
+      ;;
+    4)
+      if [[ -z "${ISO_URL}" ]]; then
+        echo "Choice 4 selected: set ISO_URL manually."
+        echo "Example: ISO_URL='https://example.com/windows.iso' ./install_windows_auto.sh"
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Invalid WIN_VERSION_CHOICE: ${choice}"
+      exit 1
+      ;;
+  esac
+}
+
+resolve_iso_source() {
+  if [[ -n "${ISO_URL}" ]]; then
+    return
+  fi
+
+  if [[ -n "${WIN_VERSION_CHOICE}" ]]; then
+    set_iso_from_choice "${WIN_VERSION_CHOICE}"
+    return
+  fi
+
+  if [[ -t 0 ]]; then
+    show_windows_menu
+    read -r -p "Masukkan pilihan [1-4]: " choice
+    set_iso_from_choice "${choice}"
+  fi
+}
 
 apt_install() {
   export DEBIAN_FRONTEND=noninteractive
@@ -148,6 +205,21 @@ write_unattend() {
           <Description>Open RDP firewall</Description>
           <CommandLine>cmd /c netsh advfirewall firewall set rule group="remote desktop" new enable=Yes</CommandLine>
         </SynchronousCommand>
+        <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>3</Order>
+          <Description>Allow TCP 3389 explicitly</Description>
+          <CommandLine>cmd /c netsh advfirewall firewall add rule name="RDP-TCP-3389" dir=in action=allow protocol=TCP localport=3389</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>4</Order>
+          <Description>Ensure TermService is running</Description>
+          <CommandLine>cmd /c sc config TermService start= auto &amp; net start TermService</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>5</Order>
+          <Description>Disable NLA for compatibility</Description>
+          <CommandLine>cmd /c reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f</CommandLine>
+        </SynchronousCommand>
       </FirstLogonCommands>
     </component>
   </settings>
@@ -196,6 +268,8 @@ MSG
 }
 
 main() {
+  resolve_iso_source
+
   echo "==> Installing required packages"
   apt_install
 
