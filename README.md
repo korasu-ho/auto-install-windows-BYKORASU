@@ -185,10 +185,13 @@ sudo ./diagnose_rdp.sh
 ```bash
 sudo ./stop_windows_vm.sh
 sudo rm -f /opt/winvm/winvm.qcow2 /opt/winvm/Autounattend.xml /opt/winvm/autounattend.iso
-sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 ./install_windows_auto.sh
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' VM_MACHINE='pc' WIN_VERSION_CHOICE=3 ./install_windows_auto.sh
 ```
 
-Script sudah diperbarui agar partisi dibuat otomatis (wipe + create + format) dan target instalasi diarahkan ke Disk 0 Partition 2.
+Catatan:
+- Ini bukan masalah driver ethernet.
+- Untuk setup ini, Windows tidak perlu driver storage tambahan karena disk dipasang sebagai IDE/SATA kompatibel.
+- Script sekarang default ke machine `pc` dan target instalasi menggunakan partisi available (lebih kompatibel dibanding hardcode partition ID).
 
 - Jika VM berat/lambat, turunkan VM_CPUS dan/atau VM_RAM_MB.
 - Jika install gagal, cek ISO Anda (wajib ISO bootable x64).

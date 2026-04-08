@@ -11,6 +11,7 @@ BASE_DIR="${BASE_DIR:-/opt/${VM_NAME}}"
 DISK_PATH="${DISK_PATH:-${BASE_DIR}/${VM_NAME}.qcow2}"
 VM_CPUS="${VM_CPUS:-4}"
 VM_RAM_MB="${VM_RAM_MB:-6144}"
+VM_MACHINE="${VM_MACHINE:-pc}"
 RDP_HOST_PORT="${RDP_HOST_PORT:-3389}"
 VNC_DISPLAY="${VNC_DISPLAY:-1}"
 QEMU_PIDFILE="${BASE_DIR}/qemu-run.pid"
@@ -27,7 +28,7 @@ fi
 
 qemu-system-x86_64 \
   -name "${VM_NAME}" \
-  -machine type=q35,accel=kvm:tcg \
+  -machine type="${VM_MACHINE}",accel=kvm:tcg \
   -cpu host \
   -smp "${VM_CPUS}" \
   -m "${VM_RAM_MB}" \

@@ -20,6 +20,7 @@ DISK_PATH="${DISK_PATH:-${BASE_DIR}/${VM_NAME}.qcow2}"
 DISK_GB="${DISK_GB:-64}"
 VM_CPUS="${VM_CPUS:-4}"
 VM_RAM_MB="${VM_RAM_MB:-6144}"
+VM_MACHINE="${VM_MACHINE:-pc}"
 RDP_HOST_PORT="${RDP_HOST_PORT:-3389}"
 VNC_DISPLAY="${VNC_DISPLAY:-1}"  # VNC port = 5900 + display
 WIN_ADMIN_PASSWORD="${WIN_ADMIN_PASSWORD:-ChangeMe123!}"
@@ -272,10 +273,7 @@ write_unattend() {
       </DiskConfiguration>
       <ImageInstall>
         <OSImage>
-          <InstallTo>
-            <DiskID>0</DiskID>
-            <PartitionID>2</PartitionID>
-          </InstallTo>
+          <InstallToAvailablePartition>true</InstallToAvailablePartition>
           <WillShowUI>OnError</WillShowUI>
         </OSImage>
       </ImageInstall>
@@ -375,7 +373,7 @@ start_installer_vm() {
 
   qemu-system-x86_64 \
     -name "${VM_NAME}-install" \
-    -machine type=q35,accel=kvm:tcg \
+    -machine type="${VM_MACHINE}",accel=kvm:tcg \
     -cpu host \
     -smp "${VM_CPUS}" \
     -m "${VM_RAM_MB}" \
