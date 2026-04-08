@@ -30,6 +30,7 @@ WIN_USER="Administrator"
 AUTOUNATTEND_XML="${BASE_DIR}/Autounattend.xml"
 AUTOUNATTEND_ISO="${BASE_DIR}/autounattend.iso"
 QEMU_PIDFILE="${BASE_DIR}/qemu-install.pid"
+ISO_SOURCE_MARKER="${BASE_DIR}/.iso_source_url"
 
 mkdir -p "${BASE_DIR}"
 
@@ -63,6 +64,10 @@ set_iso_from_choice() {
         echo "Choice 4 selected: set ISO_URL manually."
         echo "Example: ISO_URL='https://example.com/windows.iso' ./install_windows_auto.sh"
         exit 1
+      fi
+      # Avoid reusing generic default path from previous runs.
+      if [[ "${ISO_PATH}" == "${BASE_DIR}/windows.iso" ]]; then
+        ISO_PATH="${BASE_DIR}/windows_custom.iso"
       fi
       ;;
     *)
@@ -100,10 +105,56 @@ apt_install() {
     wget
 }
 
+is_mega_url() {
+  local url="$1"
+  [[ "$url" == *"mega.nz/file/"* || "$url" == *"mega.nz/#!"* ]]
+}
+
+download_from_mega() {
+  local mega_url="$1"
+
+  if ! command -v megadl >/dev/null 2>&1; then
+    echo "Installing megatools for Mega download..."
+    apt-get install -y megatools
+  fi
+
+  local marker
+  marker="$(mktemp)"
+  touch "$marker"
+
+  echo "Downloading ISO from Mega..."
+  megadl --path "${BASE_DIR}" "$mega_url"
+
+  local downloaded
+  downloaded="$(find "${BASE_DIR}" -maxdepth 1 -type f -newer "$marker" | head -n 1 || true)"
+  rm -f "$marker"
+
+  if [[ -z "$downloaded" ]]; then
+    echo "Error: Mega download completed but file was not found in ${BASE_DIR}."
+    exit 1
+  fi
+
+  mv -f "$downloaded" "${ISO_PATH}"
+  echo "Mega ISO saved to ${ISO_PATH}"
+}
+
 prepare_iso() {
   if [[ -f "${ISO_PATH}" ]]; then
-    echo "Windows ISO found: ${ISO_PATH}"
-    return
+    if [[ -n "${ISO_URL}" && -f "${ISO_SOURCE_MARKER}" ]]; then
+      if [[ "$(cat "${ISO_SOURCE_MARKER}")" == "${ISO_URL}" ]]; then
+        echo "Windows ISO found (source matches requested URL): ${ISO_PATH}"
+        return
+      fi
+
+      echo "Existing ISO source differs from requested URL; replacing file."
+      rm -f "${ISO_PATH}"
+    elif [[ -n "${ISO_URL}" ]]; then
+      echo "Existing ISO found but source is unknown; replacing to avoid wrong ISO."
+      rm -f "${ISO_PATH}"
+    else
+      echo "Windows ISO found: ${ISO_PATH}"
+      return
+    fi
   fi
 
   if [[ -z "${ISO_URL}" ]]; then
@@ -112,8 +163,16 @@ prepare_iso() {
     exit 1
   fi
 
-  echo "Downloading Windows ISO..."
-  wget -O "${ISO_PATH}" "${ISO_URL}"
+  if is_mega_url "${ISO_URL}"; then
+    download_from_mega "${ISO_URL}"
+  else
+    echo "Downloading Windows ISO..."
+    wget -O "${ISO_PATH}" "${ISO_URL}"
+  fi
+
+  if [[ -n "${ISO_URL}" ]]; then
+    printf '%s' "${ISO_URL}" > "${ISO_SOURCE_MARKER}"
+  fi
 }
 
 prepare_disk() {

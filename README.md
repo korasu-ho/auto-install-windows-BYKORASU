@@ -24,52 +24,24 @@ Anda bisa override dengan environment variable.
 - droplet_one_shot_setup.sh: one-shot setup dari droplet baru
 
 ## Cara pakai
-### Opsi paling mudah (Windows one-click push ke GitHub)
-1. Double-click file `push_github_one_click.bat` di folder project.
-2. Script akan otomatis:
-- set git user/email (jika belum ada),
-- commit perubahan,
-- set remote ke repo GitHub,
-- push ke branch `main`.
-3. Jika diminta login GitHub saat push, pakai username + Personal Access Token.
+### 0) Prasyarat (wajib)
+Di DigitalOcean firewall/security group, buka inbound:
+- TCP 3389 (RDP)
+- TCP 5901 (VNC monitor installer)
 
-Setelah push selesai, di droplet cukup clone:
+### 1) Jika Anda sudah di terminal droplet (alur paling jelas)
+Jalankan perintah ini satu per satu:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
+cd /root
 git clone https://github.com/korasu-ho/auto-install-windows-BYKORASU.git
 cd auto-install-windows-BYKORASU
-chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh
+chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh diagnose_rdp.sh droplet_one_shot_setup.sh
 ```
 
-### Opsi manual
-1. Upload file script ke droplet, lalu beri execute permission:
-
-```bash
-chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh
-```
-
-### Opsi droplet one-shot (paling cepat dari server baru)
-Jalankan langsung di droplet:
-
-```bash
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
-```
-
-Contoh dengan password dan pilihan Windows Server 2022:
-
-```bash
-sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
-```
-
-2. Jalankan installer unattended:
-
-```bash
-sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' ISO_URL='https://url-iso-windows-anda.iso' ./install_windows_auto.sh
-```
-
-Atau pakai pilihan cepat ISO official Microsoft:
+Lalu mulai installer (contoh Windows Server 2022):
 
 ```bash
 sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 ./install_windows_auto.sh
@@ -81,29 +53,80 @@ Pilihan `WIN_VERSION_CHOICE`:
 - `3` = Windows Server 2022
 - `4` = custom URL (wajib isi `ISO_URL`)
 
-Jika ISO sudah Anda copy manual ke `/opt/winvm/windows.iso`, cukup:
+Contoh custom URL ISO:
 
 ```bash
-sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' ./install_windows_auto.sh
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://contoh-domain.com/windows-server.iso' ./install_windows_auto.sh
 ```
 
-3. Akses proses install:
-- VNC: `IP_DROPLET:5901`
-- Setelah selesai install: RDP `IP_DROPLET:3389`
+Catatan:
+- `ISO_URL` harus direct link file `.iso` (bisa di-download langsung oleh `wget/curl`).
+- Link share `mega.nz/file/...` sekarang didukung otomatis oleh script (akan pakai `megatools`).
 
-RDP sekarang dipaksa aktif otomatis saat first logon, termasuk:
-- enable RDP,
-- buka firewall remote desktop,
-- allow TCP 3389 secara eksplisit,
-- paksa service `TermService` auto-start,
-- disable NLA untuk kompatibilitas client RDP.
+Contoh custom URL Mega (langsung):
 
-4. Setelah install selesai, hentikan mode installer dan jalankan mode normal:
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://mega.nz/file/ELBxwISD#ZhALWVoo4sLdUwcfLSZbSka3HoRYE2m5it7WAWCJREE' ./install_windows_auto.sh
+```
+
+### 2) Pantau proses install
+- Buka VNC ke `IP_DROPLET:5901`
+- Tunggu setup Windows selesai dan reboot
+
+### 3) Setelah install selesai
+Pindah dari mode installer ke mode normal boot:
 
 ```bash
 sudo ./stop_windows_vm.sh
 sudo ./start_windows_vm.sh
 ```
+
+Login dari Windows lokal via RDP ke `IP_DROPLET:3389`.
+
+### 4) Opsi super cepat (one-shot)
+Jika ingin satu perintah dari droplet baru:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=3 bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
+```
+
+Untuk `WIN_VERSION_CHOICE=4` (custom URL), gunakan:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://contoh-domain.com/windows-server.iso' bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
+```
+
+Contoh one-shot dengan link Mega:
+
+```bash
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://mega.nz/file/ELBxwISD#ZhALWVoo4sLdUwcfLSZbSka3HoRYE2m5it7WAWCJREE' bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_one_shot_setup.sh)"
+```
+
+Verifikasi ISO yang dipakai saat custom URL:
+- Untuk `WIN_VERSION_CHOICE=4`, script akan pakai `windows_custom.iso`.
+- Script menyimpan sumber URL di `/opt/winvm/.iso_source_url`.
+- Jika URL berubah, ISO lama otomatis diganti.
+
+Cek cepat di droplet:
+
+```bash
+ls -lh /opt/winvm/windows_custom.iso
+cat /opt/winvm/.iso_source_url
+```
+
+Kalau mau super yakin 100% fresh sebelum run ulang:
+
+```bash
+sudo rm -f /opt/winvm/windows_custom.iso /opt/winvm/.iso_source_url
+```
+
+### 5) Catatan RDP otomatis
+Script sudah otomatis saat first logon:
+- enable RDP,
+- buka firewall remote desktop,
+- allow TCP 3389 eksplisit,
+- set `TermService` auto-start dan start service,
+- disable NLA untuk kompatibilitas client.
 
 ## Variable penting
 - VM_CPUS (default: 4)
