@@ -22,6 +22,26 @@ Anda bisa override dengan environment variable.
 - stop_windows_vm.sh: hentikan VM
 
 ## Cara pakai
+### Opsi paling mudah (Windows one-click push ke GitHub)
+1. Double-click file `push_github_one_click.bat` di folder project.
+2. Script akan otomatis:
+- set git user/email (jika belum ada),
+- commit perubahan,
+- set remote ke repo GitHub,
+- push ke branch `main`.
+3. Jika diminta login GitHub saat push, pakai username + Personal Access Token.
+
+Setelah push selesai, di droplet cukup clone:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/korasu-ho/auto-install-windows-BYKORASU.git
+cd auto-install-windows-BYKORASU
+chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh
+```
+
+### Opsi manual
 1. Upload file script ke droplet, lalu beri execute permission:
 
 ```bash
