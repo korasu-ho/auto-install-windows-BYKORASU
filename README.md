@@ -18,10 +18,106 @@ Anda bisa override dengan environment variable.
 
 ## File
 - install_windows_auto.sh: siapkan dependency + unattended install
+- install_windows_native_disk.sh: deploy image Windows langsung ke disk droplet (tanpa QEMU)
+- droplet_native_one_shot_setup.sh: one-shot setup mode native hard drive
+- export_qcow2_to_gz.sh: export hasil install QEMU (opsi 1-3) ke image `.img.gz`
 - start_windows_vm.sh: boot normal setelah install selesai
 - stop_windows_vm.sh: hentikan VM
 - diagnose_rdp.sh: diagnosa cepat masalah koneksi RDP
 - droplet_one_shot_setup.sh: one-shot setup dari droplet baru
+
+## Mode yang tersedia
+1. Mode ringan (direct/native hard drive, tanpa QEMU runtime)
+2. Mode nested VM (Ubuntu host + Windows guest via QEMU)
+
+Jika target Anda performa maksimum pada RAM 8 GB, gunakan mode direct/native hard drive.
+
+## Mode ringan: direct/native hard drive (rekomendasi untuk performa)
+Mode ini menulis image Windows langsung ke disk droplet (`/dev/vda`), jadi tidak ada pembagian RAM Ubuntu+VM saat runtime.
+
+Penting sebelum mulai:
+- Jalankan dari environment Recovery ISO DigitalOcean.
+- Siapkan URL image Windows yang sudah siap boot + RDP (format `.img`, `.img.gz`, `.img.xz`, atau sejenisnya).
+- Ini akan menghapus isi disk target.
+
+Langkah:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+cd /root
+git clone https://github.com/korasu-ho/auto-install-windows-BYKORASU.git
+cd auto-install-windows-BYKORASU
+chmod +x install_windows_native_disk.sh
+```
+
+Contoh deploy image `.img.gz`:
+
+```bash
+sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://contoh-domain.com/windows-server.img.gz' SOURCE_TYPE=gz ./install_windows_native_disk.sh
+```
+
+Contoh deploy dari Google Drive:
+
+```bash
+sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://drive.google.com/file/d/FILE_ID/view?usp=sharing' SOURCE_TYPE=raw ./install_windows_native_disk.sh
+```
+
+Contoh deploy dari Mega:
+
+```bash
+sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://mega.nz/file/XXXX#KEY' SOURCE_TYPE=raw ./install_windows_native_disk.sh
+```
+
+One-shot mode native (jalan dari Recovery ISO):
+
+```bash
+sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://contoh-domain.com/windows-server.img.gz' SOURCE_TYPE=gz bash -c "$(curl -fsSL https://raw.githubusercontent.com/korasu-ho/auto-install-windows-BYKORASU/main/droplet_native_one_shot_setup.sh)"
+```
+
+Setelah deploy selesai:
+1. Di panel DigitalOcean, ubah boot ke `Boot from Hard Drive`.
+2. Power cycle droplet.
+3. Buka TCP 3389 di firewall DigitalOcean.
+4. Connect RDP dari lokal ke `IP_DROPLET:3389`.
+
+Catatan penting RDP mode native:
+- Script deploy memastikan image ditulis ke disk dengan benar.
+- Koneksi RDP bergantung pada image Windows yang Anda pakai (harus sudah mengaktifkan RDP + network driver).
+
+### Migrasi dari opsi 1-3 (QEMU) ke mode native hard drive
+Jika Anda sudah install Windows via opsi `1-3` dan RDP sudah normal di mode QEMU, lakukan ini untuk pindah ke mode native yang lebih ringan:
+
+1. Export disk QEMU ke image:
+
+```bash
+cd /root/auto-install-windows-BYKORASU
+chmod +x export_qcow2_to_gz.sh
+sudo ./export_qcow2_to_gz.sh
+```
+
+Output default: `/opt/winvm/export/windows-from-qcow2.img.gz`
+
+2. Upload file `.img.gz` ke URL eksternal (DO Spaces / S3 / server download Anda).
+
+3. Boot droplet ke `Recovery ISO`, lalu deploy image ke disk utama:
+
+```bash
+cd /root/auto-install-windows-BYKORASU
+sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://url-anda/windows-from-qcow2.img.gz' SOURCE_TYPE=gz ./install_windows_native_disk.sh
+```
+
+Alternatif jika file image sudah ada lokal di recovery environment:
+
+```bash
+sudo CONFIRM_DESTROY_DISK=YES IMAGE_FILE='/path/windows-from-qcow2.img.gz' SOURCE_TYPE=gz ./install_windows_native_disk.sh
+```
+
+4. Setelah selesai:
+1. Ubah boot ke `Boot from Hard Drive`.
+2. Reboot/power cycle.
+3. Pastikan firewall DO membuka TCP `3389`.
+4. RDP dari lokal ke `IP_DROPLET:3389`.
 
 ## Cara pakai
 ### 0) Prasyarat (wajib)
@@ -93,6 +189,19 @@ sudo ./start_windows_vm.sh
 ```
 
 Login dari Windows lokal via RDP ke `IP_DROPLET:3389`.
+
+Urutan setelah install di VNC agar bisa RDP dari lokal:
+1. Tunggu Windows selesai setup hingga masuk desktop/login.
+2. Kembali ke terminal droplet, jalankan:
+
+```bash
+sudo ./stop_windows_vm.sh
+sudo ./start_windows_vm.sh
+```
+
+3. Pastikan firewall DigitalOcean membuka TCP `3389`.
+4. Dari PC lokal, buka `mstsc` lalu konek ke `IP_DROPLET:3389`.
+5. Login dengan user `Administrator` dan password dari `WIN_ADMIN_PASSWORD`.
 
 ### 4) Opsi super cepat (one-shot)
 Jika ingin satu perintah dari droplet baru:
@@ -172,6 +281,23 @@ Buka port berikut di firewall droplet/security group:
 ```bash
 ps aux | grep qemu-system-x86_64
 ```
+
+- Jika install/start gagal karena proses QEMU lama masih nyangkut, jalankan reset cepat:
+
+```bash
+sudo ./stop_windows_vm.sh
+sudo pkill -f qemu-system-x86_64 || true
+sudo rm -f /opt/winvm/qemu-install.pid /opt/winvm/qemu-run.pid
+```
+
+- Jika gagal karena port RDP bentrok (`Could not set up host forwarding rule tcp::3389-:3389`):
+
+```bash
+sudo ss -ltnp | grep :3389
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' RDP_HOST_PORT=3390 WIN_VERSION_CHOICE=3 ./install_windows_auto.sh
+```
+
+Lalu konek RDP ke `IP_DROPLET:3390` dan buka TCP `3390` di firewall DigitalOcean.
 
 - Jalankan diagnosa RDP end-to-end dari host droplet:
 
