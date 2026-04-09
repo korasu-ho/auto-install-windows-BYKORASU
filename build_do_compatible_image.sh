@@ -30,6 +30,7 @@ VNC_DISPLAY="${VNC_DISPLAY:-1}"
 PIDFILE="${BASE_DIR}/qemu-do-builder.pid"
 AUTOUNATTEND_XML="${BASE_DIR}/Autounattend-do.xml"
 AUTOUNATTEND_ISO="${BASE_DIR}/autounattend-do.iso"
+AUTOUNATTEND_STAGING_DIR="${BASE_DIR}/autounattend-staging"
 
 WIN_USER="Administrator"
 WIN_LABEL="Windows"
@@ -192,6 +193,24 @@ EOF
         <PathAndCredentials wcm:action="add" wcm:keyValue="4" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <Path>E:\vioscsi\${os_tag}\amd64</Path>
         </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="5" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>F:\viostor\${os_tag}\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="6" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>F:\vioscsi\${os_tag}\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="7" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>G:\viostor\${os_tag}\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="8" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>G:\vioscsi\${os_tag}\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="9" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>H:\viostor\${os_tag}\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="10" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>H:\vioscsi\${os_tag}\amd64</Path>
+        </PathAndCredentials>
       </DriverPaths>
     </component>
 
@@ -288,7 +307,10 @@ ${shutdown_cmd}
 </unattend>
 EOF
 
-  genisoimage -quiet -o "${AUTOUNATTEND_ISO}" -J -R "${AUTOUNATTEND_XML}"
+  rm -rf "${AUTOUNATTEND_STAGING_DIR}"
+  mkdir -p "${AUTOUNATTEND_STAGING_DIR}"
+  cp "${AUTOUNATTEND_XML}" "${AUTOUNATTEND_STAGING_DIR}/Autounattend.xml"
+  genisoimage -quiet -o "${AUTOUNATTEND_ISO}" -J -R "${AUTOUNATTEND_STAGING_DIR}/Autounattend.xml"
 }
 
 start_builder_vm() {

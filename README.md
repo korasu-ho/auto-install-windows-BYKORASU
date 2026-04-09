@@ -74,6 +74,16 @@ Contoh manual mode:
 sudo AUTO_INSTALL=false WIN_VERSION_CHOICE=3 VM_CPUS=4 VM_RAM_MB=6144 ./build_do_compatible_image.sh
 ```
 
+Jika `AUTO_INSTALL=true` tapi VNC tetap berhenti di halaman install awal, biasanya builder lama masih jalan atau file unattended lama belum terganti. Reset cepat:
+
+```bash
+cd /root/auto-install-windows-BYKORASU
+sudo pkill -f 'qemu-system-x86_64.*do-builder' || true
+sudo rm -f /opt/winvm/qemu-do-builder.pid
+sudo rm -f /opt/winvm/Autounattend-do.xml /opt/winvm/autounattend-do.iso
+sudo AUTO_INSTALL=true WIN_VERSION_CHOICE=3 VM_CPUS=4 VM_RAM_MB=6144 ./build_do_compatible_image.sh
+```
+
 ### Step 2. Install Windows di VNC
 
 Jika `AUTO_INSTALL=true` (default):
