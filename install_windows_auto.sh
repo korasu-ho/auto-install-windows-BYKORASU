@@ -25,6 +25,7 @@ RDP_HOST_PORT="${RDP_HOST_PORT:-3389}"
 VNC_DISPLAY="${VNC_DISPLAY:-1}"  # VNC port = 5900 + display
 WIN_ADMIN_PASSWORD="${WIN_ADMIN_PASSWORD:-ChangeMe123!}"
 TIMEZONE="${TIMEZONE:-SE Asia Standard Time}"
+MIN_ISO_FREE_MB="${MIN_ISO_FREE_MB:-6144}"
 
 # Windows unattended account name. Keep Administrator for easiest RDP setup.
 WIN_USER="Administrator"
@@ -115,6 +116,10 @@ is_mega_url() {
 
 download_from_mega() {
   local mega_url="$1"
+  local iso_dir
+  iso_dir="$(dirname "${ISO_PATH}")"
+
+  mkdir -p "${iso_dir}"
 
   if ! command -v megadl >/dev/null 2>&1; then
     echo "Installing megatools for Mega download..."
@@ -126,18 +131,20 @@ download_from_mega() {
   touch "$marker"
 
   echo "Downloading ISO from Mega..."
-  megadl --path "${BASE_DIR}" "$mega_url"
+  megadl --path "${iso_dir}" "$mega_url"
 
   local downloaded
-  downloaded="$(find "${BASE_DIR}" -maxdepth 1 -type f -newer "$marker" | head -n 1 || true)"
+  downloaded="$(find "${iso_dir}" -maxdepth 1 -type f -newer "$marker" | head -n 1 || true)"
   rm -f "$marker"
 
   if [[ -z "$downloaded" ]]; then
-    echo "Error: Mega download completed but file was not found in ${BASE_DIR}."
+    echo "Error: Mega download completed but file was not found in ${iso_dir}."
     exit 1
   fi
 
-  mv -f "$downloaded" "${ISO_PATH}"
+  if [[ "$downloaded" != "${ISO_PATH}" ]]; then
+    mv -f "$downloaded" "${ISO_PATH}"
+  fi
   echo "Mega ISO saved to ${ISO_PATH}"
 }
 
@@ -174,6 +181,35 @@ download_from_gdrive() {
   echo "Google Drive ISO saved to ${ISO_PATH}"
 }
 
+check_iso_target_free_space() {
+  local iso_dir
+  iso_dir="$(dirname "${ISO_PATH}")"
+  mkdir -p "${iso_dir}"
+
+  local avail_mb
+  avail_mb="$(df -Pm "${iso_dir}" | awk 'NR==2 {print $4}')"
+
+  if [[ -z "${avail_mb}" ]]; then
+    echo "Warning: failed to detect free space for ${iso_dir}; continuing."
+    return
+  fi
+
+  if (( avail_mb < MIN_ISO_FREE_MB )); then
+    echo "Error: free space is too low for ISO download."
+    echo "- Target dir : ${iso_dir}"
+    echo "- Free space : ${avail_mb} MB"
+    echo "- Required   : >= ${MIN_ISO_FREE_MB} MB (tunable via MIN_ISO_FREE_MB)"
+    echo
+    df -h "${iso_dir}" || true
+    echo
+    echo "Tips:"
+    echo "1) Remove old files in ${BASE_DIR} (old .iso/.qcow2)."
+    echo "2) Use a larger path: BASE_DIR='/path/with-more-space' or ISO_PATH='/path/windows.iso'."
+    echo "3) Reduce qcow2 target size if needed: DISK_GB=40 (or lower as needed)."
+    exit 1
+  fi
+}
+
 prepare_iso() {
   if [[ -f "${ISO_PATH}" ]]; then
     if [[ -n "${ISO_URL}" && -f "${ISO_SOURCE_MARKER}" ]]; then
@@ -198,6 +234,8 @@ prepare_iso() {
     echo "Place ISO at ${ISO_PATH} or export ISO_URL='https://.../windows.iso'"
     exit 1
   fi
+
+  check_iso_target_free_space
 
   if is_mega_url "${ISO_URL}"; then
     download_from_mega "${ISO_URL}"

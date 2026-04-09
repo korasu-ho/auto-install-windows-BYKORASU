@@ -43,7 +43,8 @@ Script `build_do_compatible_image.sh` akan menyiapkan keduanya otomatis.
 Untuk pilihan Windows `1-3`, script sekarang mendukung mode auto (default), jadi langkah VNC jauh lebih sedikit.
 
 ### Step 1. Prepare + Start Builder VM
-
+cd auto-install-windows-BYKORASU
+git pull origin main --ff-only # pastikan update terbaru jika sudah pernah clone
 Di droplet builder:
 
 ```bash
@@ -164,6 +165,16 @@ Buka inbound port di DigitalOcean Cloud Firewall:
 - TCP 3389 (RDP)
 - TCP 5901 (VNC, hanya untuk mode QEMU installer)
 
+Catatan sumber file dari Mega:
+- Script akan memakai `megadl` dari paket `megatools`.
+- Untuk mode Native (`install_windows_native_disk.sh`) dan mode QEMU (`install_windows_auto.sh`), paket ini akan dicoba di-install otomatis jika belum ada.
+- Jika repo apt Anda bermasalah, install manual dulu:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y megatools
+```
+
 ---
 
 ## Mode A: Native Hard Drive (Lebih Ringan)
@@ -201,6 +212,8 @@ Contoh deploy dari Mega:
 ```bash
 sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://mega.nz/file/XXXX#KEY' SOURCE_TYPE=gz ./install_windows_native_disk.sh
 ```
+
+Catatan: untuk URL Mega, script akan auto-install `megatools` bila belum tersedia.
 
 ### A2. One-Shot Native Deploy
 
@@ -261,6 +274,8 @@ Contoh custom URL Mega:
 ```bash
 sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' WIN_VERSION_CHOICE=4 ISO_URL='https://mega.nz/file/XXXX#KEY' ./install_windows_auto.sh
 ```
+
+Catatan: untuk URL Mega, script akan auto-install `megatools` bila belum tersedia.
 
 ### B2. One-Shot QEMU Install
 
@@ -449,6 +464,44 @@ sudo ./stop_windows_vm.sh
 sudo pkill -f qemu-system-x86_64 || true
 sudo rm -f /opt/winvm/qemu-install.pid /opt/winvm/qemu-run.pid
 ```
+
+### QEMU gagal download ISO (`No space left on device`) saat URL Mega/HTTP
+
+Gejala umum:
+- Log `megadl`/`wget` berhenti di ~2-4 GB dengan error `No space left on device`.
+
+Penyebab umum:
+- Storage pada lokasi download ISO penuh (default biasanya di `/opt/winvm`).
+- Ada file lama yang besar (misalnya `.iso` lama atau `winvm.qcow2`) dari percobaan sebelumnya.
+
+Cek cepat kapasitas:
+
+```bash
+df -h /opt /opt/winvm /root
+sudo du -h --max-depth=1 /opt/winvm 2>/dev/null | sort -h
+```
+
+Bersihkan artifact lama (jalankan hanya jika memang ingin reset percobaan sebelumnya):
+
+```bash
+sudo ./stop_windows_vm.sh || true
+sudo rm -f /opt/winvm/*.iso /opt/winvm/windows_custom.iso /opt/winvm/winvm.qcow2
+```
+
+Jalankan ulang dengan path yang lebih lega (contoh):
+
+```bash
+sudo mkdir -p /mnt/winvm
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' \
+	BASE_DIR='/mnt/winvm' \
+	WIN_VERSION_CHOICE=4 \
+	ISO_URL='https://mega.nz/file/XXXX#KEY' \
+	./install_windows_auto.sh
+```
+
+Catatan:
+- Script sekarang melakukan pre-check ruang kosong sebelum download ISO.
+- Jika perlu, threshold minimal bisa diatur via `MIN_ISO_FREE_MB` (default `6144`).
 
 ### Port 3389 bentrok
 
