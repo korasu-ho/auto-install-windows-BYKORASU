@@ -26,11 +26,105 @@ Project ini menyediakan 2 mode instalasi Windows di DigitalOcean:
 - `install_windows_native_disk.sh`: deploy image Windows langsung ke disk droplet (native)
 - `droplet_native_one_shot_setup.sh`: one-shot native deploy dari Recovery ISO
 - `export_qcow2_to_gz.sh`: export disk QEMU ke `.img.gz`
+- `build_do_compatible_image.sh`: builder image baru yang DO-compatible (VirtIO storage/network)
+- `export_do_compatible_image.sh`: export image builder VirtIO ke `.img.gz`
 - `install_windows_auto.sh`: install Windows unattended di VM QEMU
 - `start_windows_vm.sh`: start VM Windows mode normal
 - `stop_windows_vm.sh`: stop VM Windows
 - `droplet_one_shot_setup.sh`: one-shot setup mode QEMU
 - `diagnose_rdp.sh`: diagnosa cepat masalah RDP
+
+---
+
+## Build Image Baru DO-Compatible (VirtIO) - Exact Steps
+
+Jawaban singkat: **iya, perlu download Windows ISO + VirtIO ISO** untuk jalur ini.
+Script `build_do_compatible_image.sh` akan menyiapkan keduanya otomatis.
+Untuk pilihan Windows `1-3`, script sekarang mendukung mode auto (default), jadi langkah VNC jauh lebih sedikit.
+
+### Step 1. Prepare + Start Builder VM
+
+Di droplet builder:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+cd /root
+git clone https://github.com/korasu-ho/auto-install-windows-BYKORASU.git
+cd auto-install-windows-BYKORASU
+chmod +x build_do_compatible_image.sh export_do_compatible_image.sh
+
+sudo WIN_VERSION_CHOICE=3 VM_CPUS=4 VM_RAM_MB=6144 ./build_do_compatible_image.sh
+```
+
+Mode yang tersedia:
+- `AUTO_INSTALL=true` (default): unattended install + auto konfigurasi RDP + auto install guest tools.
+- `AUTO_INSTALL=false`: manual mode seperti cara lama (load driver sendiri di VNC).
+
+Cek status builder kapan saja:
+
+```bash
+cd /root/auto-install-windows-BYKORASU
+sudo WIN_VERSION_CHOICE=3 ./build_do_compatible_image.sh --status
+```
+
+Contoh manual mode:
+
+```bash
+sudo AUTO_INSTALL=false WIN_VERSION_CHOICE=3 VM_CPUS=4 VM_RAM_MB=6144 ./build_do_compatible_image.sh
+```
+
+### Step 2. Install Windows di VNC
+
+Jika `AUTO_INSTALL=true` (default):
+1. Pantau proses setup lewat VNC.
+2. Tunggu sampai masuk desktop/login.
+3. Verifikasi network aktif dan RDP aktif.
+4. Shutdown Windows normal (Start Menu).
+
+Jika `AUTO_INSTALL=false` (manual), lakukan ini:
+
+1. Klik `Load driver` di layar pemilihan disk.
+2. Buka CD VirtIO, pilih driver storage (`viostor` atau `vioscsi`, folder `amd64`, sesuai versi OS).
+3. Setelah disk muncul, lanjut install normal.
+4. Setelah login Windows, jalankan `virtio-win-guest-tools.exe` dari CD VirtIO.
+5. Pastikan network jalan dan RDP aktif.
+6. Shutdown Windows dengan normal (dari Start Menu).
+
+### Step 3. Export ke .img.gz
+
+Di terminal droplet builder:
+
+```bash
+cd /root/auto-install-windows-BYKORASU
+sudo ./export_do_compatible_image.sh
+```
+
+Output default:
+- `/opt/winvm/export/windows-do-compatible.img.gz`
+
+### Step 4. Publish file sementara (opsional) lalu deploy native
+
+Publish sementara di droplet builder:
+
+```bash
+sudo apt-get install -y apache2
+sudo cp /opt/winvm/export/windows-do-compatible.img.gz /var/www/html/
+ls -lh /var/www/html/windows-do-compatible.img.gz
+```
+
+Di droplet target (Recovery ISO), stream langsung ke disk:
+
+```bash
+sudo wget -O- 'http://IP_DROPLET_BUILDER/windows-do-compatible.img.gz' | gunzip | sudo dd of=/dev/vda bs=16M conv=fsync status=progress
+sync
+```
+
+Setelah selesai:
+1. Set boot ke `Boot from Hard Drive`.
+2. Power cycle.
+3. Buka TCP 3389.
+4. Test RDP.
 
 ---
 
@@ -252,8 +346,13 @@ Jika source di Google Drive (gdown):
 Opsi otomatis (script handle gdown):
 
 ```bash
-sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://drive.google.com/file/d/FILE_ID/view?usp=sharing' SOURCE_TYPE=gz ./install_windows_native_disk.sh
+sudo CONFIRM_DESTROY_DISK=YES WORK_DIR='/dev/shm/windows-native-deploy' IMAGE_URL='https://drive.google.com/file/d/FILE_ID/view?usp=sharing' SOURCE_TYPE=gz ./install_windows_native_disk.sh
 ```
+
+Catatan penting:
+- `WORK_DIR` sebaiknya bukan filesystem yang sama dengan `TARGET_DISK`.
+- Pada Recovery ISO, nilai aman yang umum: `/dev/shm/windows-native-deploy` (RAM-backed).
+- Jika file besar dan `/dev/shm` tidak cukup, gunakan metode stream langsung dari URL HTTP (lihat bagian fallback di bawah).
 
 Opsi manual (download dulu):
 
@@ -264,6 +363,30 @@ python3 -m venv /tmp/gdown-venv
 /tmp/gdown-venv/bin/pip install --upgrade pip gdown
 /tmp/gdown-venv/bin/gdown --fuzzy 'https://drive.google.com/file/d/FILE_ID/view?usp=sharing' -O /tmp/windows-from-qcow2.img.gz
 sudo CONFIRM_DESTROY_DISK=YES IMAGE_FILE='/tmp/windows-from-qcow2.img.gz' SOURCE_TYPE=gz ./install_windows_native_disk.sh
+```
+
+Fallback paling stabil (direkomendasikan untuk file besar): stream langsung dari droplet sumber
+
+1. Di droplet sumber (yang menyimpan file export), publish sementara file:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y apache2
+sudo cp /opt/winvm/export/windows-from-qcow2.img.gz /var/www/html/
+ls -lh /var/www/html/windows-from-qcow2.img.gz
+```
+
+2. Di droplet target (Recovery ISO), tulis langsung ke disk tanpa menyimpan file lokal besar:
+
+```bash
+sudo wget -O- 'http://IP_DROPLET_SUMBER/windows-from-qcow2.img.gz' | gunzip | sudo dd of=/dev/vda bs=16M conv=fsync status=progress
+sync
+```
+
+3. Setelah selesai, di droplet sumber hapus file publik:
+
+```bash
+sudo rm -f /var/www/html/windows-from-qcow2.img.gz
 ```
 
 ### Step 4. Finalisasi Boot Native
@@ -297,6 +420,17 @@ sudo CONFIRM_DESTROY_DISK=YES IMAGE_FILE='/tmp/windows-from-qcow2.img.gz' SOURCE
 ---
 
 ## Troubleshooting Cepat
+
+### Native deploy gagal dengan `No space left on device` atau `Input/output error`
+
+Penyebab umum:
+- File image di-download ke storage yang terlalu kecil (misalnya `/dev/shm`).
+- File source berada di disk yang sama dengan target write (`/dev/vda`) sehingga source ikut rusak saat proses write.
+
+Solusi cepat:
+1. Gunakan metode stream langsung dari HTTP source (lihat fallback di Step 3).
+2. Jika tetap ingin download dulu, pakai `WORK_DIR` di filesystem terpisah dari `TARGET_DISK`.
+3. Jalankan ulang deploy dari awal (jangan lanjut proses yang sudah gagal).
 
 ### QEMU nyangkut / proses lama masih jalan
 

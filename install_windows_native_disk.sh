@@ -40,6 +40,29 @@ log() {
   echo "[INFO] $*"
 }
 
+get_mount_source() {
+  local path="$1"
+  findmnt -T "${path}" -no SOURCE 2>/dev/null || true
+}
+
+assert_source_not_on_target_disk() {
+  local path="$1"
+  local mount_src
+  mount_src="$(get_mount_source "${path}")"
+
+  # If source is on the same target disk (e.g. /dev/vda1 while writing /dev/vda),
+  # writing will corrupt the source file mid-process.
+  if [[ -n "${mount_src}" && "${mount_src}" == ${TARGET_DISK}* ]]; then
+    echo "Error: source file is on the same disk as TARGET_DISK (${TARGET_DISK})."
+    echo "Source mount: ${mount_src}"
+    echo "Use one of these options:"
+    echo "1) Stream directly from URL (IMAGE_URL), or"
+    echo "2) Place IMAGE_FILE on another disk/volume, or"
+    echo "3) Set WORK_DIR to a different filesystem (e.g. attached volume)."
+    exit 1
+  fi
+}
+
 is_mega_url() {
   local url="$1"
   [[ "$url" == *"mega.nz/file/"* || "$url" == *"mega.nz/#!"* ]]
@@ -132,6 +155,8 @@ write_from_local_file() {
     echo "Error: Downloaded file is missing/empty: ${file_path}"
     exit 1
   fi
+
+  assert_source_not_on_target_disk "${file_path}"
 
   case "${stype}" in
     gz)
