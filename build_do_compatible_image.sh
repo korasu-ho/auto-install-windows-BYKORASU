@@ -19,6 +19,7 @@ WIN_ADMIN_PASSWORD="${WIN_ADMIN_PASSWORD:-ChangeMe123!}"
 TIMEZONE="${TIMEZONE:-SE Asia Standard Time}"
 ISO_URL="${ISO_URL:-}"
 ISO_PATH="${ISO_PATH:-}"
+FORCE_ISO_DOWNLOAD="${FORCE_ISO_DOWNLOAD:-false}"
 VIRTIO_ISO_URL="${VIRTIO_ISO_URL:-https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win.iso}"
 VIRTIO_ISO_PATH="${VIRTIO_ISO_PATH:-${BASE_DIR}/virtio-win.iso}"
 RAW_IMG_PATH="${RAW_IMG_PATH:-${BASE_DIR}/${VM_NAME}-do-virtio.img}"
@@ -181,6 +182,13 @@ apt_install() {
 download_if_missing() {
   local url="$1"
   local path="$2"
+
+  if [[ -f "${path}" ]] && bool_is_true "${FORCE_ISO_DOWNLOAD}"; then
+    echo "Re-downloading (FORCE_ISO_DOWNLOAD=true): ${path}"
+    wget -O "${path}" "${url}"
+    return
+  fi
+
   if [[ -f "${path}" ]]; then
     echo "Found: ${path}"
     return

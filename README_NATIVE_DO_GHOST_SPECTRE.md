@@ -59,10 +59,24 @@ cd /root/auto-install-windows-BYKORASU
 sudo AUTO_INSTALL=false WIN_VERSION_CHOICE=4 ISO_URL='URL_ISO_GHOST_SPECTRE' BUILDER_DISK_IF=ide VM_CPUS=4 VM_RAM_MB=6144 ./build_do_compatible_image.sh
 ```
 
+Jika sebelumnya sudah ada file `/opt/winvm/windows-custom.iso`, script akan pakai file itu dan tidak download ulang.
+Untuk paksa download ulang dari URL baru:
+
+```bash
+sudo pkill -f qemu-system-x86_64 || true
+sudo rm -f /opt/winvm/qemu-do-builder.pid
+cd /root/auto-install-windows-BYKORASU
+sudo FORCE_ISO_DOWNLOAD=true AUTO_INSTALL=false WIN_VERSION_CHOICE=4 ISO_URL='DIRECT_URL_ISO_GHOST_SPECTRE' BUILDER_DISK_IF=ide VM_CPUS=4 VM_RAM_MB=6144 ./build_do_compatible_image.sh
+```
+
+Catatan:
+- `ISO_URL` harus direct download link file ISO (bukan halaman share/web preview).
+- Link seperti halaman LimeWire/Drive share page biasanya bukan direct ISO stream.
+
 Jika source ISO dari Mega atau Google Drive, install dependency dulu (selain `apt-get update`):
 
 ```bash
-sudo apt-get install -y megatools python3 python3-venv
+sudo apt-get install -y megatools python3.12 python3.12-venv
 ```
 
 ### Opsi A - Download ISO dari Mega
@@ -84,7 +98,7 @@ ls -lh /opt/winvm/windows-custom.iso
 
 ```bash
 cd /opt/winvm
-python3 -m venv /opt/winvm/.gdown-venv
+python3.12 -m venv /opt/winvm/.gdown-venv
 /opt/winvm/.gdown-venv/bin/pip install --upgrade pip
 /opt/winvm/.gdown-venv/bin/pip install gdown
 /opt/winvm/.gdown-venv/bin/gdown --fuzzy 'URL_GDRIVE_GHOST_SPECTRE' -O /opt/winvm/windows-custom.iso
@@ -128,6 +142,26 @@ Setelah login pertama di Windows Ghost Spectre:
 Catatan:
 - Jangan export sebelum driver storage + network terpasang.
 - Jika NIC belum jalan, cek Device Manager dan pastikan `Red Hat VirtIO Ethernet Adapter` aktif.
+
+Catatan real-case (lebih stabil dibanding satu file INF):
+- Jika install manual awal tidak kebind, jalankan install semua INF dalam folder driver (subdirs).
+- Contoh di CMD as Administrator:
+
+```cmd
+for %L in (D E F G H I J K) do if exist %L:\NetKVM pnputil /add-driver "%L:\NetKVM\*.inf" /subdirs /install
+for %L in (D E F G H I J K) do if exist %L:\viostor pnputil /add-driver "%L:\viostor\*.inf" /subdirs /install
+for %L in (D E F G H I J K) do if exist %L:\vioscsi pnputil /add-driver "%L:\vioscsi\*.inf" /subdirs /install
+pnputil /scan-devices
+```
+
+- Verifikasi setelah reboot:
+
+```cmd
+pnputil /enum-devices /problem
+ipconfig /all
+```
+
+- Jika tersisa problem `ACPI\\QEMU0002` saja, biasanya tetap aman untuk export (ini umumnya device balloon, bukan NIC/storage inti).
 
 ---
 
@@ -216,3 +250,10 @@ Jika Droplet 2 gagal boot atau RDP gagal:
 2. Pastikan boot mode sudah kembali ke Hard Drive
 3. Ulangi build manual dengan `BUILDER_DISK_IF=ide`
 4. Pastikan driver `viostor/vioscsi` dan `NetKVM` benar-benar terpasang sebelum shutdown
+
+Jika di Windows muncul error `CM_PROB_FAILED_INSTALL` untuk `Ethernet Controller`:
+1. Pastikan arsitektur OS `64-bit` (gunakan folder `amd64`, bukan arm64/x86)
+2. Install driver dengan metode subdirs (lihat catatan real-case di BLOK 3)
+3. Jalankan `pnputil /scan-devices`, reboot, lalu cek ulang `pnputil /enum-devices /problem`
+
+Jika `ipconfig` terlihat kosong, gunakan `ipconfig /all` untuk melihat semua adapter secara lengkap.
