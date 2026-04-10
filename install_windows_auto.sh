@@ -156,10 +156,15 @@ is_google_drive_url() {
 ensure_gdown() {
   local venv_path="${BASE_DIR}/.gdown-venv"
   if [[ ! -x "${venv_path}/bin/gdown" ]]; then
-    echo "Installing gdown (Google Drive downloader)..."
+    echo "Installing gdown (Google Drive downloader)..." >&2
     python3 -m venv "${venv_path}"
     "${venv_path}/bin/pip" install --upgrade pip >/dev/null
     "${venv_path}/bin/pip" install gdown >/dev/null
+  fi
+
+  if [[ ! -x "${venv_path}/bin/gdown" ]]; then
+    echo "Error: gdown binary is missing after installation: ${venv_path}/bin/gdown"
+    exit 1
   fi
 
   echo "${venv_path}/bin/gdown"

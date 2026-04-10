@@ -27,6 +27,7 @@ VM_CPUS="${VM_CPUS:-4}"
 VM_RAM_MB="${VM_RAM_MB:-6144}"
 RDP_HOST_PORT="${RDP_HOST_PORT:-3389}"
 VNC_DISPLAY="${VNC_DISPLAY:-1}"
+BUILDER_DISK_IF="${BUILDER_DISK_IF:-virtio}" # virtio|ide
 PIDFILE="${BASE_DIR}/qemu-do-builder.pid"
 AUTOUNATTEND_XML="${BASE_DIR}/Autounattend-do.xml"
 AUTOUNATTEND_ISO="${BASE_DIR}/autounattend-do.iso"
@@ -157,7 +158,7 @@ write_unattend() {
   if bool_is_true "${AUTO_SHUTDOWN_AFTER_SETUP}"; then
     shutdown_cmd=$(cat <<'EOF'
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-          <Order>6</Order>
+          <Order>7</Order>
           <Description>Auto shutdown after setup</Description>
           <CommandLine>cmd /c shutdown /s /t 30</CommandLine>
         </SynchronousCommand>
@@ -210,6 +211,36 @@ EOF
         </PathAndCredentials>
         <PathAndCredentials wcm:action="add" wcm:keyValue="10" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <Path>H:\vioscsi\${os_tag}\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="11" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>D:\viostor\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="12" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>D:\vioscsi\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="13" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>E:\viostor\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="14" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>E:\vioscsi\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="15" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>F:\viostor\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="16" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>F:\vioscsi\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="17" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>G:\viostor\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="18" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>G:\vioscsi\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="19" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>H:\viostor\w10\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="20" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Path>H:\vioscsi\w10\amd64</Path>
         </PathAndCredentials>
       </DriverPaths>
     </component>
@@ -298,6 +329,11 @@ EOF
           <Description>Ensure TermService</Description>
           <CommandLine>cmd /c sc config TermService start= auto &amp; net start TermService</CommandLine>
         </SynchronousCommand>
+        <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>6</Order>
+          <Description>Enable VirtIO storage drivers at boot</Description>
+          <CommandLine>cmd /c reg add "HKLM\SYSTEM\CurrentControlSet\Services\viostor" /v Start /t REG_DWORD /d 0 /f &amp; reg add "HKLM\SYSTEM\CurrentControlSet\Services\vioscsi" /v Start /t REG_DWORD /d 0 /f</CommandLine>
+        </SynchronousCommand>
 ${shutdown_cmd}
       </FirstLogonCommands>
     </component>
@@ -314,6 +350,21 @@ EOF
 }
 
 start_builder_vm() {
+  local disk_arg
+
+  case "${BUILDER_DISK_IF}" in
+    virtio)
+      disk_arg="-drive file=${RAW_IMG_PATH},if=virtio,format=raw,cache=writeback,discard=unmap"
+      ;;
+    ide)
+      disk_arg="-drive file=${RAW_IMG_PATH},if=ide,format=raw,cache=writeback,discard=unmap"
+      ;;
+    *)
+      echo "Error: invalid BUILDER_DISK_IF=${BUILDER_DISK_IF}. Use virtio or ide."
+      exit 1
+      ;;
+  esac
+
   if [[ -f "${PIDFILE}" ]] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
     echo "Builder VM already running (pid $(cat "${PIDFILE}"))."
     return
@@ -325,7 +376,7 @@ start_builder_vm() {
     -cpu host \
     -smp "${VM_CPUS}" \
     -m "${VM_RAM_MB}" \
-    -drive file="${RAW_IMG_PATH}",if=virtio,format=raw,cache=writeback,discard=unmap \
+    ${disk_arg} \
     -drive file="${ISO_PATH}",media=cdrom,if=ide \
     -drive file="${VIRTIO_ISO_PATH}",media=cdrom,if=ide \
     ${AUTO_DRIVE_ARG} \
@@ -345,12 +396,19 @@ Builder VM started.
 - Disk image: ${RAW_IMG_PATH}
 
 Mode AUTO_INSTALL=${AUTO_INSTALL}
+Disk IF mode=${BUILDER_DISK_IF}
 
 If AUTO_INSTALL=true (recommended for choices 1-3):
 1) Setup should run mostly unattended.
 2) VirtIO guest tools + RDP configuration run automatically at first logon.
 3) Verify Windows reached desktop and networking is up.
 4) Shutdown guest cleanly before export.
+
+If setup fails with disk/partition unattended errors:
+1) Stop builder VM.
+2) Retry with IDE fallback:
+  sudo AUTO_INSTALL=true WIN_VERSION_CHOICE=${WIN_VERSION_CHOICE} BUILDER_DISK_IF=ide ./build_do_compatible_image.sh
+3) Keep VirtIO ISO attached (already handled by this script) and proceed normally.
 
 If AUTO_INSTALL=false (manual mode):
 1) At disk selection, click "Load driver".

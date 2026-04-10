@@ -295,6 +295,48 @@ sudo ./start_windows_vm.sh
 
 3. RDP ke `IP_DROPLET:3389`.
 
+### B4. Contoh Berhasil: Ghost Spectre via QEMU (Google Drive)
+
+Catatan:
+- Alur ini untuk mode QEMU (nested VM), bukan native disk langsung.
+- Pastikan droplet boot dari `Hard Drive`, bukan Recovery ISO.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+cd /root
+git clone https://github.com/korasu-ho/auto-install-windows-BYKORASU.git
+cd auto-install-windows-BYKORASU
+chmod +x install_windows_auto.sh start_windows_vm.sh stop_windows_vm.sh diagnose_rdp.sh droplet_one_shot_setup.sh
+
+sudo WIN_ADMIN_PASSWORD='PasswordKuatAnda!' \
+	WIN_VERSION_CHOICE=4 \
+	ISO_URL='https://drive.google.com/file/d/1hLz10KSY2QtDAUZ6bDdEcQojZ0y7CNCm/view?usp=sharing' \
+	DISK_GB=40 \
+	./install_windows_auto.sh
+
+cd /root/auto-install-windows-BYKORASU
+sudo ./stop_windows_vm.sh
+sudo ./start_windows_vm.sh
+```
+
+Jika RDP belum bisa walau VNC sudah masuk Windows, jalankan di Windows (via VNC, Command Prompt as Administrator):
+
+```bat
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
+netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+sc config TermService start= auto
+net start TermService
+net localgroup "Remote Desktop Users" Administrator /add
+```
+
+Opsional reset password Administrator (contoh):
+
+```bat
+net user Administrator "PasswordBaruKuat!"
+```
+
 ---
 
 ## Migrasi dari QEMU (1-3) ke Native Hard Drive
@@ -310,6 +352,7 @@ sudo ./export_qcow2_to_gz.sh
 ```
 
 Output default:
+cek hasil eksport di: ls -lh /opt/winvm/export/
 - `/opt/winvm/export/windows-from-qcow2.img.gz`
 
 ### Step 2. Siapkan URL untuk File Export
@@ -420,6 +463,42 @@ sudo rm -f /var/www/html/windows-from-qcow2.img.gz
 2. Reboot/power cycle.
 3. Pastikan TCP 3389 terbuka.
 4. RDP ke `IP_DROPLET:3389`.
+
+### Step 5. Clone ke Droplet 2
+
+Jawaban singkat: ya, bisa publish file image dari droplet 1 (misalnya lewat `/var/www/html`) lalu deploy di droplet 2.
+
+Alur cepat:
+1. Di droplet 1, export image dulu:
+
+```bash
+cd /root/auto-install-windows-BYKORASU
+sudo ./export_qcow2_to_gz.sh
+```
+
+2. Publish sementara file export dari droplet 1:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y apache2
+sudo cp /opt/winvm/export/windows-from-qcow2.img.gz /var/www/html/
+ls -lh /var/www/html/windows-from-qcow2.img.gz
+```
+
+3. Di droplet 2 (Recovery ISO), tulis langsung ke disk:
+
+```bash
+sudo wget -O- 'http://IP_DROPLET_1/windows-from-qcow2.img.gz' | gunzip | sudo dd of=/dev/vda bs=16M conv=fsync status=progress
+sync
+```
+
+4. Set boot droplet 2 ke `Hard Drive`, lalu power cycle.
+
+Catatan kompatibilitas driver (penting):
+- Script `install_windows_auto.sh` saat ini install dengan disk `if=ide` dan network `e1000` (bukan virtio).
+- Saat image dipindah ke native droplet, storage/network virtual hardware bisa berbeda.
+- Agar peluang boot native lebih aman, pastikan driver VirtIO terpasang di Windows sebelum export (jalankan `virtio-win-guest-tools.exe` di Windows guest), atau gunakan alur builder DO-compatible (`build_do_compatible_image.sh`) jika target utama memang native.
+- Jika target Anda hanya clone antar droplet dalam mode QEMU (nested), biasanya tidak perlu ubah driver karena tetap boot sebagai VM QEMU.
 
 ---
 
