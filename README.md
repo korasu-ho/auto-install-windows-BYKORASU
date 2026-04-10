@@ -137,6 +137,22 @@ Setelah selesai:
 3. Buka TCP 3389.
 4. Test RDP.
 
+Catatan penting (jika internet/RDP belum jalan setelah native boot):
+1. Di Windows, buka `ncpa.cpl` lalu pilih adapter `Red Hat VirtIO Ethernet Adapter`.
+2. Set `IPv4` manual sesuai data network dari recovery console droplet:
+	- IP address
+	- Subnet mask
+	- Default gateway
+3. Set DNS manual ke `1.1.1.1` dan `8.8.8.8`.
+4. Verifikasi dari CMD Windows:
+	- `ipconfig /all`
+	- `ping 1.1.1.1`
+	- `ping google.com`
+
+Jika ping sukses, biasanya RDP port 3389 langsung normal.
+
+Alternatif lebih cepat: gunakan script interaktif `example/windows-network-quickfix.cmd` di Windows native (Run as Administrator), lalu pilih interface (nama atau index) adapter VirtIO yang aktif dan isi IP/Subnet/Gateway sesuai data recovery console droplet (DNS otomatis diset ke `1.1.1.1` dan `8.8.8.8`).
+
 ---
 
 ## Update Repo Saat Ada Perubahan Baru
@@ -227,6 +243,14 @@ sudo CONFIRM_DESTROY_DISK=YES IMAGE_URL='https://contoh-domain.com/windows-serve
 2. Power cycle droplet.
 3. Pastikan firewall buka TCP 3389.
 4. RDP dari lokal ke `IP_DROPLET:3389`.
+
+Jika Windows bisa boot tapi tidak ada internet/RDP:
+1. Login lewat console DigitalOcean.
+2. Buka `ncpa.cpl` -> adapter `Red Hat VirtIO Ethernet Adapter` -> `IPv4`.
+3. Isi IP/Subnet/Gateway manual mengikuti info network di recovery console droplet.
+4. Isi DNS manual: `1.1.1.1` dan `8.8.8.8`.
+5. Tes `ping 1.1.1.1` dan `ping google.com` dari CMD Windows.
+6. Jika ingin lebih cepat, jalankan `example/windows-network-quickfix.cmd` (Run as Administrator) lalu isi prompt.
 
 ---
 

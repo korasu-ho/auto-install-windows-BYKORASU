@@ -28,6 +28,7 @@ VM_RAM_MB="${VM_RAM_MB:-6144}"
 RDP_HOST_PORT="${RDP_HOST_PORT:-3389}"
 VNC_DISPLAY="${VNC_DISPLAY:-1}"
 BUILDER_DISK_IF="${BUILDER_DISK_IF:-virtio}" # virtio|ide
+AUTO_SAFE_DISK_IF="${AUTO_SAFE_DISK_IF:-true}" # if true, AUTO_INSTALL may switch installer disk IF to ide for stability
 PIDFILE="${BASE_DIR}/qemu-do-builder.pid"
 AUTOUNATTEND_XML="${BASE_DIR}/Autounattend-do.xml"
 AUTOUNATTEND_ISO="${BASE_DIR}/autounattend-do.iso"
@@ -35,6 +36,8 @@ AUTOUNATTEND_STAGING_DIR="${BASE_DIR}/autounattend-staging"
 
 WIN_USER="Administrator"
 WIN_LABEL="Windows"
+WIN_IMAGE_NAME="${WIN_IMAGE_NAME:-}"
+WIN_IMAGE_INDEX="${WIN_IMAGE_INDEX:-}"
 
 mkdir -p "${BASE_DIR}"
 
@@ -86,14 +89,32 @@ set_windows_iso_by_choice() {
     1)
       ISO_URL="https://go.microsoft.com/fwlink/p/?LinkID=2195174&clcid=0x409&culture=en-us&country=US"
       ISO_PATH="${BASE_DIR}/windows2016.iso"
+      if [[ -z "${WIN_IMAGE_NAME}" ]]; then
+        WIN_IMAGE_NAME="Windows Server 2016 Datacenter Evaluation (Desktop Experience)"
+      fi
+      if [[ -z "${WIN_IMAGE_INDEX}" ]]; then
+        WIN_IMAGE_INDEX="4"
+      fi
       ;;
     2)
       ISO_URL="https://go.microsoft.com/fwlink/p/?LinkID=2195167&clcid=0x409&culture=en-us&country=US"
       ISO_PATH="${BASE_DIR}/windows2019.iso"
+      if [[ -z "${WIN_IMAGE_NAME}" ]]; then
+        WIN_IMAGE_NAME="Windows Server 2019 Datacenter Evaluation (Desktop Experience)"
+      fi
+      if [[ -z "${WIN_IMAGE_INDEX}" ]]; then
+        WIN_IMAGE_INDEX="4"
+      fi
       ;;
     3)
       ISO_URL="https://go.microsoft.com/fwlink/p/?LinkID=2195280&clcid=0x409&culture=en-us&country=US"
       ISO_PATH="${BASE_DIR}/windows2022.iso"
+      if [[ -z "${WIN_IMAGE_NAME}" ]]; then
+        WIN_IMAGE_NAME="Windows Server 2022 Datacenter Evaluation (Desktop Experience)"
+      fi
+      if [[ -z "${WIN_IMAGE_INDEX}" ]]; then
+        WIN_IMAGE_INDEX="4"
+      fi
       ;;
     4)
       if [[ -z "${ISO_URL}" ]]; then
@@ -102,6 +123,12 @@ set_windows_iso_by_choice() {
       fi
       if [[ -z "${ISO_PATH}" ]]; then
         ISO_PATH="${BASE_DIR}/windows-custom.iso"
+      fi
+      if [[ -z "${WIN_IMAGE_NAME}" ]]; then
+        WIN_IMAGE_NAME="Windows Server 2022 Datacenter Evaluation (Desktop Experience)"
+      fi
+      if [[ -z "${WIN_IMAGE_INDEX}" ]]; then
+        WIN_IMAGE_INDEX="4"
       fi
       ;;
     *)
@@ -122,6 +149,27 @@ virtio_os_tag() {
 
 bool_is_true() {
   [[ "$1" == "true" || "$1" == "1" || "$1" == "yes" ]]
+}
+
+resolve_builder_disk_if() {
+  if ! bool_is_true "${AUTO_SAFE_DISK_IF}"; then
+    echo "${BUILDER_DISK_IF}"
+    return
+  fi
+
+  # Windows setup in unattended mode can fail with ImageInstall on some builds
+  # when storage is attached as virtio too early. IDE is used only for install
+  # stage; VirtIO tools/drivers are still injected for native compatibility.
+  if bool_is_true "${AUTO_INSTALL}"; then
+    case "${WIN_VERSION_CHOICE}" in
+      1|2|3)
+        echo "ide"
+        return
+        ;;
+    esac
+  fi
+
+  echo "${BUILDER_DISK_IF}"
 }
 
 apt_install() {
@@ -248,6 +296,16 @@ EOF
     <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
       <ImageInstall>
         <OSImage>
+          <InstallFrom>
+            <MetaData wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+              <Key>/IMAGE/INDEX</Key>
+              <Value>${WIN_IMAGE_INDEX}</Value>
+            </MetaData>
+            <MetaData wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+              <Key>/IMAGE/NAME</Key>
+              <Value>${WIN_IMAGE_NAME}</Value>
+            </MetaData>
+          </InstallFrom>
           <InstallToAvailablePartition>true</InstallToAvailablePartition>
           <WillShowUI>OnError</WillShowUI>
         </OSImage>
@@ -351,8 +409,11 @@ EOF
 
 start_builder_vm() {
   local disk_arg
+  local effective_disk_if
 
-  case "${BUILDER_DISK_IF}" in
+  effective_disk_if="$(resolve_builder_disk_if)"
+
+  case "${effective_disk_if}" in
     virtio)
       disk_arg="-drive file=${RAW_IMG_PATH},if=virtio,format=raw,cache=writeback,discard=unmap"
       ;;
@@ -360,7 +421,7 @@ start_builder_vm() {
       disk_arg="-drive file=${RAW_IMG_PATH},if=ide,format=raw,cache=writeback,discard=unmap"
       ;;
     *)
-      echo "Error: invalid BUILDER_DISK_IF=${BUILDER_DISK_IF}. Use virtio or ide."
+      echo "Error: invalid disk interface mode=${effective_disk_if}. Use virtio or ide."
       exit 1
       ;;
   esac
@@ -396,7 +457,8 @@ Builder VM started.
 - Disk image: ${RAW_IMG_PATH}
 
 Mode AUTO_INSTALL=${AUTO_INSTALL}
-Disk IF mode=${BUILDER_DISK_IF}
+Disk IF requested=${BUILDER_DISK_IF}
+Disk IF effective=${effective_disk_if}
 
 If AUTO_INSTALL=true (recommended for choices 1-3):
 1) Setup should run mostly unattended.
@@ -418,6 +480,11 @@ If AUTO_INSTALL=false (manual mode):
 5) Enable RDP manually, then shutdown guest.
 
 After that, run export_do_compatible_image.sh to create .img.gz for native deploy.
+
+Tip:
+- If AUTO_INSTALL stops at edition selection, set WIN_IMAGE_NAME explicitly, e.g.:
+  WIN_IMAGE_NAME='Windows Server 2022 Datacenter Evaluation (Desktop Experience)'
+- You can also set WIN_IMAGE_INDEX explicitly (common for Datacenter Desktop Experience: 4).
 MSG
 }
 

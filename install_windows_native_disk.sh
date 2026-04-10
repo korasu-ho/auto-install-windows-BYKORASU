@@ -99,6 +99,27 @@ detect_source_type() {
   esac
 }
 
+detect_source_type_from_file_content() {
+  local file_path="$1"
+
+  if [[ "${SOURCE_TYPE}" != "auto" ]]; then
+    echo "${SOURCE_TYPE}"
+    return
+  fi
+
+  # Use magic bytes so downloaded files without extension are still detected correctly.
+  local magic
+  magic="$(od -An -tx1 -N6 "${file_path}" 2>/dev/null | tr -d ' \n')"
+
+  if [[ "${magic}" == 1f8b* ]]; then
+    echo "gz"
+  elif [[ "${magic}" == fd377a585a00* ]]; then
+    echo "xz"
+  else
+    detect_source_type "${file_path}"
+  fi
+}
+
 stream_write_raw() {
   local source_cmd="$1"
   log "Writing image to ${TARGET_DISK} ..."
@@ -208,7 +229,7 @@ main() {
 
   local stype
   if [[ -n "${IMAGE_FILE}" ]]; then
-    stype="$(detect_source_type "${IMAGE_FILE}")"
+    stype="$(detect_source_type_from_file_content "${IMAGE_FILE}")"
   else
     stype="$(detect_source_type "${IMAGE_URL}")"
   fi
@@ -219,10 +240,14 @@ main() {
   elif is_mega_url "${IMAGE_URL}"; then
     local mega_file="${WORK_DIR}/windows-image.bin"
     download_mega_to_file "${IMAGE_URL}" "${mega_file}"
+    stype="$(detect_source_type_from_file_content "${mega_file}")"
+    log "Detected downloaded source type: ${stype}"
     write_from_local_file "${mega_file}" "${stype}"
   elif is_google_drive_url "${IMAGE_URL}"; then
     local gd_file="${WORK_DIR}/windows-image.bin"
     download_gdrive_to_file "${IMAGE_URL}" "${gd_file}"
+    stype="$(detect_source_type_from_file_content "${gd_file}")"
+    log "Detected downloaded source type: ${stype}"
     write_from_local_file "${gd_file}" "${stype}"
   else
     write_direct_stream "${IMAGE_URL}" "${stype}"
